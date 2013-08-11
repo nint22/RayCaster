@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Client">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Utilities">
+      <UniqueIdentifier>{54fadb91-417d-445d-ba05-a368fac2a333}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Inline Dependencies">
+      <UniqueIdentifier>{4c739462-6cf7-4ca2-99cd-0d1f1a868b8f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="MainWindow.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="GameController.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="MinimapView.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="World.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldView.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="AssetManager.h">
+      <Filter>Utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="VectorMath.h">
+      <Filter>Utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="Utilities.h">
+      <Filter>Utilities</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="MainWindow.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="GameController.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="Main.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="MinimapView.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="World.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="WorldView.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="AssetManager.cpp">
+      <Filter>Utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="Utilities.cpp">
+      <Filter>Utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="VectorMath.cpp">
+      <Filter>Utilities</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ArchitectureDiagram.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="SDL2.dll">
+      <Filter>Inline Dependencies</Filter>
+    </None>
+    <None Include="DemoWorld.txt">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="SDL2.lib">
+      <Filter>Inline Dependencies</Filter>
+    </Library>
+    <Library Include="SDL2main.lib">
+      <Filter>Inline Dependencies</Filter>
+    </Library>
+  </ItemGroup>
+</Project>
