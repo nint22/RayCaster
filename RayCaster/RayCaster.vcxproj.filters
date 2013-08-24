@@ -47,6 +47,9 @@
     <ClInclude Include="Utilities.h">
       <Filter>Utilities</Filter>
     </ClInclude>
+    <ClInclude Include="SimpleJSON.h">
+      <Filter>Utilities</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MainWindow.cpp">
@@ -80,6 +83,9 @@
       <Filter>Utilities</Filter>
     </ClCompile>
     <ClCompile Include="VectorMath.cpp">
+      <Filter>Utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="SimpleJSON.cpp">
       <Filter>Utilities</Filter>
     </ClCompile>
   </ItemGroup>
