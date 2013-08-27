@@ -5,19 +5,31 @@
  
 ***************************************************************/
 
+// Main include
 #include "SimpleJSON.h"
+using namespace SimpleJSON;
 
-// Includes
-#include <map>
-#include <stdio.h>
-#include <ctype.h>
-using namespace std;
+// Win32: suppress the security warning associated with C-string functions
+#ifdef WIN32
+    #pragma warning(disable : 4996)
+#endif
+
+/*** Forward Declare ***/
+
+static char* GetToken( FILE* fileHandle );
+static void UngetToken( FILE* fileHandle, char** tokenString );
+static bool ParseString( const char* tokenString );
+static bool ParseNumber( const char* tokenString, float* fValue );
+static bool ParseBoolean( const char* tokenString, bool* boolValueOut );
+static bool ParseValue( FILE* fileHandle, JsonValue** valueOut );
+static bool ParseObject( FILE* fileHandle, JsonObject** objectOut );
+static bool ParseArray( FILE* fileHandle, JsonArray** arrayOut );
 
 /*** Private ***/
 
 // Given the file handle, return the next token; skips whitespaces, etc.
 // Note that the returned pointer is malloc'ed, so make sure to release it!
-static const char* GetToken( FILE* fileHandle )
+static char* GetToken( FILE* fileHandle )
 {
     static const int bufferLength = 512;
     char buffer[bufferLength] = { '\0' };
@@ -79,12 +91,17 @@ static const char* GetToken( FILE* fileHandle )
 
 // Puts the token back into the given file-buffer; correctly pushes the letters in the
 // correct way so that re-reading the buffer, through GetToken(...), will return correct results
-static void UngetToken( FILE* fileHandle, const char* tokenString )
+// Note that the given token string will also be deleted through a delete[]
+static void UngetToken( FILE* fileHandle, char** tokenString )
 {
+    // Put string back on track
     ungetc( ' ', fileHandle );
-    const int tokenLength = strlen(tokenString);
+    const int tokenLength = strlen(*tokenString);
     for(int i = tokenLength - 1; i >= 0; i--)
-        ungetc( tokenString[i], fileHandle );
+        ungetc( (*tokenString)[i], fileHandle );
+
+    // Release full string
+    delete[] tokenString;
 }
 
 // Given a string, returns true if it is a well-formed JSON string, else false on error
@@ -101,7 +118,7 @@ static bool ParseString( const char* tokenString )
 // Returns true on success, false on failure / error
 // Note that this can even parse a number-string like "-3.01967E-20"
 // Note that we could also use atof(...) from the cstd-lib, but that's no fun..
-static bool ParseNumber( const char* tokenString )
+static bool ParseNumber( const char* tokenString, float* fValue )
 {
     const int tokenLength = strlen(tokenString);
     int tokenIndex = 0;
@@ -141,6 +158,7 @@ static bool ParseNumber( const char* tokenString )
     tokenIndex = tokenEndIndex;
 
     // TODO: Read off the rest of the string, and deal with the 'e'/'E' character..
+    *fValue = 1.0f;
 }
 
 static bool ParseBoolean( const char* tokenString, bool* boolValueOut )
@@ -173,146 +191,294 @@ static bool ParseBoolean( const char* tokenString, bool* boolValueOut )
 
 // Returns true on success, false on failure / error
 // Posts the result on the given ObjectData object
-static bool ParseValue( FILE* fileHandle, const ObjectData* objectData )
+static bool ParseValue( FILE* fileHandle, JsonValue** valueOut )
 {
-    // Peek (and then un-get) the string token
-    const char* tokenString = GetToken(fileHandle);
+    // Initialize working memory
+    *valueOut = NULL;
+    float fValue;
+    bool bValue;
+    JsonObject* jsonObject = NULL;
+    JsonArray* jsonArray = NULL;
 
+    // Peek (and then un-get) the string token
+    char* tokenString = GetToken(fileHandle);
+    
     // Given the token, figure out the type and parse it appropriately
     if( ParseString(tokenString) )
     {
-        objectData->m_type = ObjectType_String;
-        objectData->m_data.m_string = std::string(tokenString);
+        *valueOut = new JsonValue( std::string(tokenString) );
+        delete[] tokenString;
     }
-    else if( ParseNumber(tokenString, &objectData->m_data.m_number) )
+    else if( ParseNumber(tokenString, &fValue) )
     {
-        objectData->m_type = ObjectType_Number;
+        *valueOut = new JsonValue( fValue );
+        delete[] tokenString;
     }
-    else if( ParseBoolean(tokenString, &objectData->m_data.m_boolean) )
+    else if( ParseBoolean(tokenString, &bValue) )
     {
-        objectData->m_type = ObjectType_Bool;
+        *valueOut = new JsonValue( bValue );
+        delete[] tokenString;
     }
 
-    // Special case: object / array
-    else if( ParseObject(fileHandle, objectData) )
+    // To test for object / array, we must put back the string
+    else
     {
-        // TODO
-    }
-    else if( ParseArray(fileHandle, objectData) )
-    {
-        // TODO
-    }
+        UngetToken(fileHandle, &tokenString);
 
-    // Done!
-    UngetToken(fileHandle, tokenString);
+        if( ParseObject(fileHandle, &jsonObject) )
+        {
+            *valueOut = new JsonValue( jsonObject );
+        }
+        else if( ParseArray(fileHandle, &jsonArray) )
+        {
+            *valueOut = new JsonValue( jsonArray );
+        }
+    }
+    
+    // Done; return true (success) if the valueOut is set
+    return ((*valueOut) != NULL) ? true : false;
 }
 
 // Parse the given object stream; returns true on success, false on error
 // Does recursive parsing as needed
-static bool ParseObject( FILE* fileHandle, const ObjectData* objectDataOut )
+static bool ParseObject( FILE* fileHandle, JsonObject** objectOut )
 {
-    char* token = NextToken( fileHandle );
-    if(token == NULL)
-        return false;
-
-    bool objectStarts = (token[0] == '{');
-    free(token);
-
-    // Object starts
-    while(objectStarts)
+    // Initialize working memory
+    bool isValid = true;
+    *objectOut = new JsonObject();
+    
+    // Must start with '{'
+    char* tokenString = GetToken( fileHandle );
+    if( tokenString == NULL || tokenString[0] != '{' )
     {
-        // We're expecting a key-string
-        token = NextToken( fileHandle );
-        bool isKeyString = ParseString( token );
-        std::string KeyString = token;
-        free(token);
+        delete[] tokenString;
+        isValid = false;
+    }
+    
+    // Keep reading
+    while( isValid )
+    {
+        // We're expecting a "key-string : value" format
+        tokenString = GetToken( fileHandle );
+        bool isObjectEnd = (tokenString != NULL && tokenString[0] == '}');
+        bool isKeyString = ParseString( tokenString );
+        std::string KeyString = tokenString;
+        delete[] tokenString;
+
+        // If we're at the end of the key-value list, break-out!
+        if( isObjectEnd )
+            break;
 
         // Expecting a colon (key:value)
-        token = NextToken( fileHandle );
-        bool isColon = (token != NULL && token[0] == ':');
-        free(token);
+        tokenString = GetToken( fileHandle );
+        bool isColon = (tokenString != NULL && tokenString[0] == ':');
+        delete[] tokenString;
 
         // Expecting a value (could be object, string, array, etc.)
-        ObjectData objectData;
-        bool isValue = ParseValue( fileHandle, &objectData );
+        JsonValue* jsonValue;
+        bool isValue = ParseValue( fileHandle, &jsonValue );
 
         // Error checking
         if( !isKeyString || !isColon || !isValue )
-            return false;
-
+        {
+            isValue = false;
+        }
+        // Post result
+        else
+        {
+            (*objectOut)->insert( JsonObjectPair(KeyString, jsonValue) );
+        }
     }
+
+    // Release buffer if on error
+    if(!isValid)
+    {
+        // Release map
+        for(JsonObject::iterator it = (*objectOut)->begin(); it != (*objectOut)->end(); ++it)
+        {
+            delete it->second;
+        }
+
+        delete *objectOut;
+        *objectOut = NULL;
+    }
+    return isValid;
 }
 
 // Parse the given array stream; returns true on success, false on error
 // Does recursive parsing as needed
-static bool ParseArray( FILE* fileHandle, const ObjectArray* objectArrayOut )
+static bool ParseArray( FILE* fileHandle, JsonArray** arrayOut )
 {
-    // Arrays will always have the pattern of "value, ..., value]"
-    objectArrayOut->m_type = ObjectType_Array;
+    // Initialize working memory
+    bool isValid = true;
+    *arrayOut = new JsonArray();
+
+    // Must start with '[' character
+    char* tokenString = GetToken( fileHandle );
+    if( tokenString == NULL || tokenString[0] != '[' )
+    {
+        delete[] tokenString;
+        return false;
+    }
 
     // Go through the array...
-    while( true )
+    while( isValid )
     {
-        // Parse the object
-        ObjectData objectData;
-        if(!ParseValue(fileHandle, &objectData))
-            return false;
-
-        // Save off object
-        objectArrayOut->m_data.m_array.push_back( objectData );
-
-        // What's next? End of array or another object?
-        const char* tokenString = GetToken( fileHandle );
+        // Peek at end for end-condition
+        tokenString = GetToken( fileHandle );
         if( tokenString == NULL )
         {
-            return false;
+            isValid = false;
+            break;
         }
         // End of array, break out!
         else if( tokenString[0] == ']' )
         {
-            free(tokenString);
+            delete[] tokenString;
             break;
         }
-        // Just continue
-        else if( tokenString[0] == ',' )
+
+        // Put the value back, in case it's data for the next array
+        UngetToken( fileHandle, &tokenString );
+
+        // Parse the object in question
+        JsonValue* jsonValue;
+        if(!ParseValue(fileHandle, &jsonValue))
         {
-            free(tokenString);
+            isValid = false;
+            break;
         }
-        // Unknown token...
+
+        // Save off object
+        (*arrayOut)->push_back( jsonValue );
+
+        // Peek at the next token, reading off any comma-characters
+        tokenString = GetToken( fileHandle );
+        if( tokenString != NULL && tokenString[0] == ',')
+        {
+            delete[] tokenString;
+        }
+        // Some sort of error
+        else if(tokenString == NULL)
+        {
+            isValid = false;
+            break;
+        }
+        // Else, put back token for next read
         else
         {
-            free(tokenString);
-            return false;
+            UngetToken( fileHandle, &tokenString );
         }
     }
 
-    // All good!
-    return true;
+    // Release buffer if on error
+    if(!isValid)
+    {
+        // Release array
+        while( !(*arrayOut)->empty() )
+        {
+            JsonValue* jsonValue = (*arrayOut)->back();
+            (*arrayOut)->pop_back();
+
+            delete jsonValue;
+        }
+
+        delete *arrayOut;
+        *arrayOut = NULL;
+    }
+    return isValid;
 }
 
 /*** Public ***/
 
-bool SimpleJSON::ParseSimpleJSON( FILE* fileHandle, const ObjectData* rootObject )
+JsonValue::JsonValue()
+{
+    m_type = JsonType_Null;
+    memset( this, 0, sizeof(this) );
+}
+
+JsonValue::JsonValue( const bool givenBool )
+{
+    m_type = JsonType_Bool;
+    m_data.m_boolean = givenBool;
+}
+
+JsonValue::JsonValue( JsonArray* /*gifted*/ givenArray )
+{
+    m_type = JsonType_Array;
+    m_data.m_array = givenArray;
+}
+
+JsonValue::JsonValue( JsonObject* /*gifted*/ givenObject )
+{
+    m_type = JsonType_Object;
+    m_data.m_object = givenObject;
+}
+
+JsonValue::JsonValue( const float givenFloat )
+{
+    m_type = JsonType_Number;
+    m_data.m_number = givenFloat;
+}
+
+JsonValue::JsonValue( const std::string& givenString )
+{
+    m_type = JsonType_String;
+    m_data.m_string = new std::string(givenString);
+}
+
+JsonValue::~JsonValue()
+{
+    if( m_type == JsonType_String && m_data.m_string != NULL )
+    {
+        delete m_data.m_string;
+    }
+    else if( m_type == JsonType_Object && m_data.m_object != NULL )
+    {
+        // Release all key->value pairs
+        for(JsonObject::iterator it = m_data.m_object->begin(); it != m_data.m_object->end(); ++it)
+        {
+            delete it->second;
+        }
+        delete m_data.m_object;
+    }
+    else if( m_type == JsonType_Array && m_data.m_array != NULL )
+    {
+        // Release all elements
+        while( !m_data.m_array->empty() )
+        {
+            JsonValue* jsonValue = m_data.m_array->back();
+            m_data.m_array->pop_back();
+
+            delete jsonValue;
+        }
+        delete m_data.m_array;
+    }
+}
+
+bool ParseSimpleJSON( FILE* fileHandle, JsonValue* rootValue )
 {
     // All valid JSON files start as anonymous root-objects or root-arrays
     char* firstToken = GetToken( fileHandle );
-    bool isGood = false;
-
     if(firstToken == NULL)
-    {
         return false;
-    }
-    else if(firstToken[0] == '{')
+
+    bool isObject = (firstToken[0] == '{');
+    bool isArray = (firstToken[0] == '[');
+    bool isValid = false;
+
+    UngetToken( fileHandle, &firstToken );
+
+    if( isObject )
     {
-        rootObject->m_type = ObjectType_Object;
-        isGood = ParseObject(fileHandle, rootObject->m_data.m_object);
+        rootValue->m_type = JsonType_Object;
+        isValid = ParseObject(fileHandle, &(rootValue->m_data.m_object));
     }
-    else if(firstToken[0] == '[')
+    else if( isArray )
     {
-        rootObject->m_type = ObjectType_Array;
-        isGood = ParseArray(fileHandle, rootObject->m_data.m_array);
+        rootValue->m_type = JsonType_Array;
+        isValid = ParseArray(fileHandle, &(rootValue->m_data.m_array));
     }
 
-    free(firstToken);
-    return isGood;
+    return isValid;
 }
